@@ -1,0 +1,16 @@
+build/
+bin/
+*.obj
+*.exe
+*.pdb
+*.ilk
+cache/
+*.user
+.vs/
+x64/
+Debug/
+Release/
+config.ini
+imgui/*.cpp
+imgui/*.h
+!imgui/.gitkeep
