@@ -16,7 +16,6 @@ External bunny-hop tool for Counter-Strike 2. Reads game memory externally (no D
 
 - Windows 10/11 x64
 - Visual Studio 2022 (v143 toolset)
-- [Dear ImGui](https://github.com/ocornut/imgui) v1.91.x source files
 
 ## Building
 
@@ -25,7 +24,7 @@ External bunny-hop tool for Counter-Strike 2. Reads game memory externally (no D
 3. Select **Release | x64**
 4. Build (Ctrl+Shift+B)
 
-The executable will be in `bin/Release/`.
+The executable will be in `bin/Release/`. Dear ImGui sources are already included in the `imgui/` folder.
 
 ## Usage
 
@@ -75,7 +74,7 @@ cs2-bhop/
 │   ├── overlay.h / overlay.cpp   # ImGui/DX11 settings overlay
 │   ├── console_ui.h              # ANSI drawing helpers (header, HUD, status)
 │   └── bhop.h / bhop.cpp         # Bhop controller thread
-└── imgui/                        # Drop Dear ImGui sources here
+└── imgui/                        # Dear ImGui sources (included)
 ```
 
 ## Config File
