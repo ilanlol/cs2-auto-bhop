@@ -21,15 +21,9 @@ External bunny-hop tool for Counter-Strike 2. Reads game memory externally (no D
 ## Building
 
 1. Clone this repository
-2. Download [Dear ImGui](https://github.com/ocornut/imgui/releases) and copy these files into the `imgui/` folder:
-   - `imgui.h`, `imgui.cpp`, `imgui_internal.h`, `imconfig.h`
-   - `imgui_draw.cpp`, `imgui_tables.cpp`, `imgui_widgets.cpp`, `imgui_demo.cpp`
-   - `imstb_rectpack.h`, `imstb_textedit.h`, `imstb_truetype.h`
-   - `imgui_impl_win32.h`, `imgui_impl_win32.cpp`
-   - `imgui_impl_dx11.h`, `imgui_impl_dx11.cpp`
-3. Open `cs2-bhop.sln` in Visual Studio 2022
-4. Select **Release | x64**
-5. Build (Ctrl+Shift+B)
+2. Open `cs2-bhop.sln` in Visual Studio 2022
+3. Select **Release | x64**
+4. Build (Ctrl+Shift+B)
 
 The executable will be in `bin/Release/`.
 
