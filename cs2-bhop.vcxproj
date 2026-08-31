@@ -55,7 +55,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)imgui\imgui-1.92.9b;$(ProjectDir)imgui\imgui-1.92.9b\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -75,7 +75,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)src;$(ProjectDir)imgui\imgui-1.92.9b;$(ProjectDir)imgui\imgui-1.92.9b\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -99,13 +99,13 @@
     <ClCompile Include="src\config.cpp" />
     <ClCompile Include="src\overlay.cpp" />
     <ClCompile Include="src\bhop.cpp" />
-    <ClCompile Include="imgui\imgui.cpp" />
-    <ClCompile Include="imgui\imgui_draw.cpp" />
-    <ClCompile Include="imgui\imgui_tables.cpp" />
-    <ClCompile Include="imgui\imgui_widgets.cpp" />
-    <ClCompile Include="imgui\imgui_demo.cpp" />
-    <ClCompile Include="imgui\imgui_impl_win32.cpp" />
-    <ClCompile Include="imgui\imgui_impl_dx11.cpp" />
+    <ClCompile Include="imgui\imgui-1.92.9b\imgui.cpp" />
+    <ClCompile Include="imgui\imgui-1.92.9b\imgui_draw.cpp" />
+    <ClCompile Include="imgui\imgui-1.92.9b\imgui_tables.cpp" />
+    <ClCompile Include="imgui\imgui-1.92.9b\imgui_widgets.cpp" />
+    <ClCompile Include="imgui\imgui-1.92.9b\imgui_demo.cpp" />
+    <ClCompile Include="imgui\imgui-1.92.9b\backends\imgui_impl_win32.cpp" />
+    <ClCompile Include="imgui\imgui-1.92.9b\backends\imgui_impl_dx11.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\memory.h" />
@@ -116,14 +116,14 @@
     <ClInclude Include="src\overlay.h" />
     <ClInclude Include="src\console_ui.h" />
     <ClInclude Include="src\bhop.h" />
-    <ClInclude Include="imgui\imgui.h" />
-    <ClInclude Include="imgui\imgui_internal.h" />
-    <ClInclude Include="imgui\imconfig.h" />
-    <ClInclude Include="imgui\imstb_rectpack.h" />
-    <ClInclude Include="imgui\imstb_textedit.h" />
-    <ClInclude Include="imgui\imstb_truetype.h" />
-    <ClInclude Include="imgui\imgui_impl_win32.h" />
-    <ClInclude Include="imgui\imgui_impl_dx11.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\imgui.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\imgui_internal.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\imconfig.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\imstb_rectpack.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\imstb_textedit.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\imstb_truetype.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\backends\imgui_impl_win32.h" />
+    <ClInclude Include="imgui\imgui-1.92.9b\backends\imgui_impl_dx11.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

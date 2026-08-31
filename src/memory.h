@@ -40,7 +40,7 @@ inline ModuleInfo GetModuleInfo(DWORD pid, const wchar_t* moduleName) {
             do {
                 if (_wcsicmp(me.szModule, moduleName) == 0) {
                     info.base = reinterpret_cast<uintptr_t>(me.modBaseAddr);
-                    info.size = me.modSizeOfImage;
+                    info.size = me.modBaseSize;
                     break;
                 }
             } while (Module32NextW(snap, &me));
