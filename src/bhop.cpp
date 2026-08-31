@@ -18,6 +18,8 @@ void BhopController::Stop() {
 }
 
 void BhopController::Run() {
+    bool lastOnGround = false;
+
     while (m_running) {
         bool spaceHeld = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
         m_spaceHeld.store(spaceHeld);
@@ -32,8 +34,11 @@ void BhopController::Run() {
             uintptr_t pawnAddr = m_clientBase + off.dwLocalPlayerPawn;
             uintptr_t pawnPtr = mem::RPM<uintptr_t>(m_process, pawnAddr);
 
+            m_debugPawn.store(pawnPtr);
+
             if (pawnPtr != 0) {
                 uint32_t flags = mem::RPM<uint32_t>(m_process, pawnPtr + off.m_fFlags);
+                m_debugFlags.store(flags);
                 bool onGround = (flags & FL_ONGROUND) != 0;
                 m_onGround.store(onGround);
 
@@ -41,14 +46,19 @@ void BhopController::Run() {
 
                 if (onGround) {
                     mem::WPM<int>(m_process, jumpAddr, JUMP_PRESS);
-                    m_jumpCount.fetch_add(1);
-                } else {
+                    std::this_thread::sleep_for(std::chrono::microseconds(500));
                     mem::WPM<int>(m_process, jumpAddr, JUMP_RELEASE);
+
+                    if (!lastOnGround)
+                        m_jumpCount.fetch_add(1);
                 }
+
+                lastOnGround = onGround;
             }
-            SwitchToThread();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         } else {
             m_onGround.store(false);
+            lastOnGround = false;
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }

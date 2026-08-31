@@ -156,6 +156,16 @@ int main() {
         frameCounter++;
         if (spaceHeld != lastSpace || onGround != lastOnGround || (frameCounter % 5 == 0)) {
             ui::drawHUD(spaceHeld, onGround, jumps);
+
+            std::cout << ansi::moveTo(ui::HUD_ROW + 2, 1) << ansi::clearLine();
+            char dbgBuf[128];
+            snprintf(dbgBuf, sizeof(dbgBuf), "   %sPawn: 0x%llX  Flags: 0x%X%s",
+                     pal::muted().c_str(),
+                     (unsigned long long)bhop.GetDebugPawn(),
+                     bhop.GetDebugFlags(),
+                     ansi::reset);
+            std::cout << dbgBuf;
+
             lastSpace    = spaceHeld;
             lastOnGround = onGround;
         }
