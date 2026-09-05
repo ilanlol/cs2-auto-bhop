@@ -46,20 +46,19 @@ void BhopController::Run() {
 
                 if (onGround) {
                     mem::WPM<int>(m_process, jumpAddr, JUMP_PRESS);
-                    std::this_thread::sleep_for(std::chrono::microseconds(500));
-                    mem::WPM<int>(m_process, jumpAddr, JUMP_RELEASE);
-
                     if (!lastOnGround)
                         m_jumpCount.fetch_add(1);
+                } else {
+                    mem::WPM<int>(m_process, jumpAddr, JUMP_RELEASE);
                 }
 
                 lastOnGround = onGround;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            SwitchToThread();
         } else {
             m_onGround.store(false);
             lastOnGround = false;
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
     }
 }
