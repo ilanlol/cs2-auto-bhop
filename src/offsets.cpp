@@ -8,22 +8,25 @@ uintptr_t OffsetManager::FindLocalPlayerPawn(HANDLE process, uintptr_t clientBas
     PatternScanner scanner(process, clientBase, clientSize);
 
     std::vector<PatternEntry> patterns = {
-        { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 83 EC 28", 3, 7 },
-        { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 8D 0D", 3, 7 },
+        { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 83 EC 28 E8", 3, 7 },
+        { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 89 5C 24", 3, 7 },
         { "48 8B 05 ? ? ? ? 48 85 C0 74 ? 8B 88", 3, 7 },
-        { "48 8D 05 ? ? ? ? 48 89 44 24 ? 48 8D 05 ? ? ? ? 48 89 44 24 ? 48 8D 05", 3, 7 },
-        { "48 8B 0D ? ? ? ? 48 85 C9 74 ? E8 ? ? ? ? 48 8B C8", 3, 7 },
+        { "48 8B 05 ? ? ? ? 48 85 C0 74 ? 48 8B 40", 3, 7 },
+        { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 8D 0D", 3, 7 },
     };
 
     uintptr_t result = scanner.FindFirstRelative(patterns);
-    if (result)
-        return result - clientBase;
+    if (result && result > clientBase && result < clientBase + clientSize) {
+        uintptr_t rva = result - clientBase;
+        if (rva > 0x100000)
+            return rva;
+    }
     return 0;
 }
 
 uintptr_t OffsetManager::FindFlags(HANDLE process, DWORD pid, uintptr_t clientBase, DWORD clientSize) {
     int32_t offset = schema::FindFieldOffset(process, pid, "client.dll", "C_BaseEntity", "m_fFlags");
-    if (offset > 0)
+    if (offset > 0x100 && offset < 0x2000)
         return static_cast<uintptr_t>(offset);
 
     PatternScanner scanner(process, clientBase, clientSize);
@@ -38,7 +41,7 @@ uintptr_t OffsetManager::FindFlags(HANDLE process, DWORD pid, uintptr_t clientBa
         uintptr_t addr = scanner.Find(entry.pattern);
         if (addr) {
             uint32_t fieldOff = mem::RPM<uint32_t>(process, addr + entry.relOffset);
-            if (fieldOff > 0 && fieldOff < 0x10000)
+            if (fieldOff > 0x100 && fieldOff < 0x2000)
                 return static_cast<uintptr_t>(fieldOff);
         }
     }
@@ -46,65 +49,79 @@ uintptr_t OffsetManager::FindFlags(HANDLE process, DWORD pid, uintptr_t clientBa
 }
 
 uintptr_t OffsetManager::FindJump(HANDLE process, uintptr_t clientBase, DWORD clientSize) {
-    PatternScanner scanner(process, clientBase, clientSize);
+    std::vector<uint8_t> moduleData(clientSize);
+    SIZE_T bytesRead = 0;
+    if (!ReadProcessMemory(process, reinterpret_cast<LPCVOID>(clientBase),
+                           moduleData.data(), clientSize, &bytesRead) || bytesRead == 0)
+        return 0;
 
     uintptr_t jumpStringAddr = 0;
-    {
-        std::vector<uint8_t> searchBuf(clientSize);
-        SIZE_T bytesRead = 0;
-        if (ReadProcessMemory(process, reinterpret_cast<LPCVOID>(clientBase), searchBuf.data(), clientSize, &bytesRead)) {
-            const char* target = "+jump";
-            size_t targetLen = 5;
-            for (size_t i = 0; i + targetLen < bytesRead; i++) {
-                if (memcmp(searchBuf.data() + i, target, targetLen) == 0 && searchBuf[i + targetLen] == '\0') {
-                    jumpStringAddr = clientBase + i;
-                    break;
-                }
-            }
+    const char* target = "+jump";
+    size_t targetLen = 5;
+    for (size_t i = 0; i + targetLen < bytesRead; i++) {
+        if (memcmp(moduleData.data() + i, target, targetLen) == 0 && moduleData[i + targetLen] == '\0') {
+            jumpStringAddr = clientBase + i;
+            break;
         }
     }
-
     if (!jumpStringAddr)
         return 0;
 
-    std::vector<PatternEntry> patterns = {
-        { "48 8D 15 ? ? ? ? 8D 4B 08 E8", 3, 7 },
-        { "48 8D 05 ? ? ? ? 48 89 05 ? ? ? ? 48 8D 05", 3, 7 },
-        { "48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8D 0D ? ? ? ? 48 89 05", 3, 7 },
-    };
+    for (size_t i = 0; i + 7 < bytesRead; i++) {
+        if (moduleData[i] != 0x48 && moduleData[i] != 0x4C)
+            continue;
+        if (moduleData[i + 1] != 0x8D)
+            continue;
 
-    uintptr_t result = scanner.FindFirstRelative(patterns);
-    if (result)
-        return result - clientBase;
+        uint8_t modrm = moduleData[i + 2];
+        if ((modrm & 0xC7) != 0x05)
+            continue;
 
-    {
-        std::vector<uint8_t> moduleMem(clientSize);
-        SIZE_T bytesRead = 0;
-        if (ReadProcessMemory(process, reinterpret_cast<LPCVOID>(clientBase), moduleMem.data(), clientSize, &bytesRead)) {
-            uint32_t rva = static_cast<uint32_t>(jumpStringAddr - clientBase);
-            for (size_t i = 0; i + 7 < bytesRead; i++) {
-                if (moduleMem[i] == 0x48 && (moduleMem[i + 1] == 0x8D || moduleMem[i + 1] == 0x8B)) {
-                    int32_t rel = *reinterpret_cast<int32_t*>(moduleMem.data() + i + 3);
-                    uintptr_t resolved = (clientBase + i + 7) + rel;
-                    if (resolved == jumpStringAddr) {
-                        for (size_t j = i; j > 0 && j > i - 128; j--) {
-                            if (moduleMem[j] == 0x48 && moduleMem[j + 1] == 0x89 && moduleMem[j + 2] == 0x05) {
-                                int32_t jumpRel = *reinterpret_cast<int32_t*>(moduleMem.data() + j + 3);
-                                uintptr_t jumpAddr = (clientBase + j + 7) + jumpRel;
-                                if (jumpAddr > clientBase && jumpAddr < clientBase + clientSize)
-                                    return jumpAddr - clientBase;
-                            }
-                        }
-                        for (size_t j = i + 7; j + 7 < bytesRead && j < i + 256; j++) {
-                            if (moduleMem[j] == 0x48 && moduleMem[j + 1] == 0x89 && moduleMem[j + 2] == 0x05) {
-                                int32_t jumpRel = *reinterpret_cast<int32_t*>(moduleMem.data() + j + 3);
-                                uintptr_t jumpAddr = (clientBase + j + 7) + jumpRel;
-                                if (jumpAddr > clientBase && jumpAddr < clientBase + clientSize)
-                                    return jumpAddr - clientBase;
-                            }
-                        }
-                    }
-                }
+        int32_t rel = *reinterpret_cast<int32_t*>(moduleData.data() + i + 3);
+        uintptr_t resolved = (clientBase + i + 7) + rel;
+
+        if (resolved != jumpStringAddr)
+            continue;
+
+        size_t searchStart = (i > 64) ? i - 64 : 0;
+        for (size_t j = searchStart; j < i; j++) {
+            if (moduleData[j] != 0x48 && moduleData[j] != 0x4C)
+                continue;
+            if (moduleData[j + 1] != 0x8D)
+                continue;
+
+            uint8_t modrm2 = moduleData[j + 2];
+            if ((modrm2 & 0xC7) != 0x05)
+                continue;
+
+            int32_t rel2 = *reinterpret_cast<int32_t*>(moduleData.data() + j + 3);
+            uintptr_t buttonAddr = (clientBase + j + 7) + rel2;
+
+            if (buttonAddr > clientBase && buttonAddr < clientBase + clientSize && buttonAddr != jumpStringAddr) {
+                uintptr_t rva = buttonAddr - clientBase;
+                if (rva > 0x100000)
+                    return rva;
+            }
+        }
+
+        size_t searchEnd = (i + 64 + 7 < bytesRead) ? i + 64 : bytesRead - 7;
+        for (size_t j = i + 7; j < searchEnd; j++) {
+            if (moduleData[j] != 0x48 && moduleData[j] != 0x4C)
+                continue;
+            if (moduleData[j + 1] != 0x8D)
+                continue;
+
+            uint8_t modrm2 = moduleData[j + 2];
+            if ((modrm2 & 0xC7) != 0x05)
+                continue;
+
+            int32_t rel2 = *reinterpret_cast<int32_t*>(moduleData.data() + j + 3);
+            uintptr_t buttonAddr = (clientBase + j + 7) + rel2;
+
+            if (buttonAddr > clientBase && buttonAddr < clientBase + clientSize && buttonAddr != jumpStringAddr) {
+                uintptr_t rva = buttonAddr - clientBase;
+                if (rva > 0x100000)
+                    return rva;
             }
         }
     }

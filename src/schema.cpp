@@ -16,14 +16,16 @@ static uintptr_t FindSchemaSystemSingleton(HANDLE process, DWORD pid) {
         { "48 8B 0D ? ? ? ? 48 85 C9 75 ? 48 8D 0D", 3, 7 },
         { "48 89 05 ? ? ? ? 4C 8D 45", 3, 7 },
         { "48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8B D0 4C 8D 45", 3, 7 },
+        { "48 8D 0D ? ? ? ? E8 ? ? ? ? 48 8D 05", 3, 7 },
     };
 
     return scanner.FindFirstRelative(patterns);
 }
 
-static uintptr_t FindTypeScope(HANDLE process, uintptr_t schemaSystem, const std::string& scopeName) {
-    uintptr_t scopesPtr = mem::RPM<uintptr_t>(process, schemaSystem + SCHEMA_SYSTEM_TYPE_SCOPES_OFFSET);
-    int32_t scopeCount = mem::RPM<int32_t>(process, schemaSystem + SCHEMA_SYSTEM_TYPE_SCOPES_OFFSET + 0x8);
+static uintptr_t FindTypeScopeWithOffset(HANDLE process, uintptr_t schemaSystem,
+                                          uintptr_t scopesOffset, const std::string& scopeName) {
+    uintptr_t scopesPtr = mem::RPM<uintptr_t>(process, schemaSystem + scopesOffset);
+    int32_t scopeCount = mem::RPM<int32_t>(process, schemaSystem + scopesOffset + 0x8);
 
     if (!scopesPtr || scopeCount <= 0 || scopeCount > 64)
         return 0;
@@ -39,8 +41,18 @@ static uintptr_t FindTypeScope(HANDLE process, uintptr_t schemaSystem, const std
     return 0;
 }
 
-static uintptr_t FindClassBinding(HANDLE process, uintptr_t typeScope, const std::string& className) {
-    uintptr_t hashBase = typeScope + TYPE_SCOPE_HASH_TABLE_OFFSET;
+static uintptr_t FindTypeScope(HANDLE process, uintptr_t schemaSystem, const std::string& scopeName) {
+    static const uintptr_t scopeOffsets[] = { 0x190, 0x188, 0x198 };
+    for (auto off : scopeOffsets) {
+        uintptr_t scope = FindTypeScopeWithOffset(process, schemaSystem, off, scopeName);
+        if (scope) return scope;
+    }
+    return 0;
+}
+
+static uintptr_t FindClassBindingWithOffset(HANDLE process, uintptr_t typeScope,
+                                             uintptr_t hashTableOffset, const std::string& className) {
+    uintptr_t hashBase = typeScope + hashTableOffset;
 
     int32_t allocCount = mem::RPM<int32_t>(process, hashBase + HASH_TABLE_ALLOC_COUNT_OFFSET);
     if (allocCount <= 0 || allocCount > 65536)
@@ -49,11 +61,14 @@ static uintptr_t FindClassBinding(HANDLE process, uintptr_t typeScope, const std
     uintptr_t bucketsPtr = mem::RPM<uintptr_t>(process, hashBase + HASH_TABLE_DATA_OFFSET);
     uintptr_t unallocBase = hashBase + HASH_UNALLOC_DATA_OFFSET;
 
+    if (!bucketsPtr) return 0;
+
     for (int i = 0; i < allocCount; i++) {
         uintptr_t bucket = bucketsPtr + i * HASH_BUCKET_SIZE;
         uintptr_t bindingPtr = mem::RPM<uintptr_t>(process, bucket + HASH_BUCKET_DATA_OFFSET);
 
-        while (bindingPtr) {
+        int depth = 0;
+        while (bindingPtr && depth < 64) {
             uintptr_t namePtr = mem::RPM<uintptr_t>(process, bindingPtr + CLASS_BINDING_NAME_OFFSET);
             if (namePtr) {
                 std::string name = mem::ReadString(process, namePtr, 128);
@@ -66,7 +81,17 @@ static uintptr_t FindClassBinding(HANDLE process, uintptr_t typeScope, const std
                 break;
             bindingPtr = unallocBase + nextIndex * HASH_BUCKET_SIZE + HASH_BUCKET_DATA_OFFSET;
             bindingPtr = mem::RPM<uintptr_t>(process, bindingPtr);
+            depth++;
         }
+    }
+    return 0;
+}
+
+static uintptr_t FindClassBinding(HANDLE process, uintptr_t typeScope, const std::string& className) {
+    static const uintptr_t hashOffsets[] = { 0x558, 0x550, 0x5B8, 0x590 };
+    for (auto off : hashOffsets) {
+        uintptr_t binding = FindClassBindingWithOffset(process, typeScope, off, className);
+        if (binding) return binding;
     }
     return 0;
 }
