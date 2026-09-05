@@ -96,6 +96,30 @@ static uintptr_t FindClassBinding(HANDLE process, uintptr_t typeScope, const std
     return 0;
 }
 
+static int32_t TryReadFields(HANDLE process, uintptr_t classBinding,
+                              uintptr_t countOffset, uintptr_t fieldsOffset,
+                              const std::string& fieldName) {
+    int16_t fieldCount = mem::RPM<int16_t>(process, classBinding + countOffset);
+    uintptr_t fieldsPtr = mem::RPM<uintptr_t>(process, classBinding + fieldsOffset);
+
+    if (!fieldsPtr || fieldCount <= 0 || fieldCount > 4096)
+        return -1;
+
+    for (int i = 0; i < fieldCount; i++) {
+        uintptr_t field = fieldsPtr + i * FIELD_DATA_SIZE;
+        uintptr_t namePtr = mem::RPM<uintptr_t>(process, field + FIELD_NAME_OFFSET);
+        if (!namePtr) continue;
+
+        std::string name = mem::ReadString(process, namePtr, 64);
+        if (name == fieldName) {
+            int16_t off16 = mem::RPM<int16_t>(process, field + FIELD_SINGLE_OFFSET);
+            if (off16 > 0)
+                return static_cast<int32_t>(off16);
+        }
+    }
+    return -1;
+}
+
 int32_t FindFieldOffset(HANDLE process, DWORD pid,
                         const std::string& scopeName,
                         const std::string& className,
@@ -110,21 +134,18 @@ int32_t FindFieldOffset(HANDLE process, DWORD pid,
     uintptr_t classBinding = FindClassBinding(process, typeScope, className);
     if (!classBinding) return -1;
 
-    int16_t fieldCount = mem::RPM<int16_t>(process, classBinding + CLASS_BINDING_FIELDS_COUNT_OFFSET);
-    uintptr_t fieldsPtr = mem::RPM<uintptr_t>(process, classBinding + CLASS_BINDING_FIELDS_OFFSET);
+    struct FieldLayout { uintptr_t countOff; uintptr_t fieldsOff; };
+    static const FieldLayout layouts[] = {
+        { 0x1C, 0x28 },
+        { 0x20, 0x28 },
+        { 0x1C, 0x30 },
+        { 0x20, 0x30 },
+    };
 
-    if (!fieldsPtr || fieldCount <= 0 || fieldCount > 4096)
-        return -1;
-
-    for (int i = 0; i < fieldCount; i++) {
-        uintptr_t field = fieldsPtr + i * FIELD_DATA_SIZE;
-        uintptr_t namePtr = mem::RPM<uintptr_t>(process, field + FIELD_NAME_OFFSET);
-        if (!namePtr) continue;
-
-        std::string name = mem::ReadString(process, namePtr, 64);
-        if (name == fieldName) {
-            return mem::RPM<int32_t>(process, field + FIELD_SINGLE_OFFSET);
-        }
+    for (auto& layout : layouts) {
+        int32_t result = TryReadFields(process, classBinding, layout.countOff, layout.fieldsOff, fieldName);
+        if (result > 0)
+            return result;
     }
     return -1;
 }

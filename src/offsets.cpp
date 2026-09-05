@@ -26,11 +26,36 @@ uintptr_t OffsetManager::FindLocalPlayerPawn(HANDLE process, uintptr_t clientBas
 
 uintptr_t OffsetManager::FindFlags(HANDLE process, DWORD pid, uintptr_t clientBase, DWORD clientSize) {
     int32_t offset = schema::FindFieldOffset(process, pid, "client.dll", "C_BaseEntity", "m_fFlags");
-    if (offset > 0x100 && offset < 0x2000)
+    if (offset > 0x80 && offset < 0x2000)
         return static_cast<uintptr_t>(offset);
 
-    PatternScanner scanner(process, clientBase, clientSize);
+    std::vector<uint8_t> moduleData(clientSize);
+    SIZE_T modBytesRead = 0;
+    if (ReadProcessMemory(process, reinterpret_cast<LPCVOID>(clientBase),
+                          moduleData.data(), clientSize, &modBytesRead) && modBytesRead > 0) {
+        const char* target = "m_fFlags";
+        size_t targetLen = 8;
+        std::vector<uintptr_t> stringAddrs;
 
+        for (size_t i = 0; i + targetLen < modBytesRead; i++) {
+            if (memcmp(moduleData.data() + i, target, targetLen) == 0 && moduleData[i + targetLen] == '\0')
+                stringAddrs.push_back(clientBase + i);
+        }
+
+        for (auto strAddr : stringAddrs) {
+            for (size_t i = 0; i + 8 <= modBytesRead; i += 8) {
+                uintptr_t val = *reinterpret_cast<uintptr_t*>(moduleData.data() + i);
+                if (val == strAddr) {
+                    uintptr_t fieldDataAddr = clientBase + i;
+                    int16_t fieldOffset = mem::RPM<int16_t>(process, fieldDataAddr + 0x10);
+                    if (fieldOffset > 0x80 && fieldOffset < 0x2000)
+                        return static_cast<uintptr_t>(fieldOffset);
+                }
+            }
+        }
+    }
+
+    PatternScanner scanner(process, clientBase, clientSize);
     std::vector<PatternEntry> patterns = {
         { "8B 81 ? ? ? ? C3 CC CC CC CC CC 48 8D 0D", 2, 0 },
         { "8B 83 ? ? ? ? 85 C0 0F 84", 2, 0 },
@@ -41,7 +66,7 @@ uintptr_t OffsetManager::FindFlags(HANDLE process, DWORD pid, uintptr_t clientBa
         uintptr_t addr = scanner.Find(entry.pattern);
         if (addr) {
             uint32_t fieldOff = mem::RPM<uint32_t>(process, addr + entry.relOffset);
-            if (fieldOff > 0x100 && fieldOff < 0x2000)
+            if (fieldOff > 0x80 && fieldOff < 0x2000)
                 return static_cast<uintptr_t>(fieldOff);
         }
     }
