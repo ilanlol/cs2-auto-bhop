@@ -17,6 +17,23 @@ void BhopController::Stop() {
         m_thread.join();
 }
 
+uintptr_t BhopController::ResolvePawn(const GameOffsets& off) {
+    uintptr_t controller = mem::RPM<uintptr_t>(m_process, m_clientBase + off.dwLocalPlayerController);
+    if (!controller) return 0;
+
+    uint32_t pawnHandle = mem::RPM<uint32_t>(m_process, controller + off.m_hPlayerPawn);
+    if (pawnHandle == 0 || pawnHandle == 0xFFFFFFFF) return 0;
+
+    uintptr_t entityList = mem::RPM<uintptr_t>(m_process, m_clientBase + off.dwEntityList);
+    if (!entityList) return 0;
+
+    uint32_t entityIndex = pawnHandle & 0x7FFF;
+    uintptr_t chunkPtr = mem::RPM<uintptr_t>(m_process, entityList + 8 * ((entityIndex >> 9) + 1));
+    if (!chunkPtr) return 0;
+
+    return mem::RPM<uintptr_t>(m_process, chunkPtr + 120 * (entityIndex & 0x1FF));
+}
+
 void BhopController::Run() {
     bool lastOnGround = false;
 
@@ -31,9 +48,7 @@ void BhopController::Run() {
                 continue;
             }
 
-            uintptr_t pawnAddr = m_clientBase + off.dwLocalPlayerPawn;
-            uintptr_t pawnPtr = mem::RPM<uintptr_t>(m_process, pawnAddr);
-
+            uintptr_t pawnPtr = ResolvePawn(off);
             m_debugPawn.store(pawnPtr);
 
             if (pawnPtr != 0) {

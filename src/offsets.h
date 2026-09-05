@@ -6,10 +6,12 @@
 #include <thread>
 
 struct GameOffsets {
-    uintptr_t dwLocalPlayerPawn = 0;
-    uintptr_t m_fFlags          = 0;
-    uintptr_t dwForceJump       = 0;
-    bool      valid             = false;
+    uintptr_t dwLocalPlayerController = 0;
+    uintptr_t dwEntityList            = 0;
+    uintptr_t m_hPlayerPawn           = 0;
+    uintptr_t m_fFlags                = 0;
+    uintptr_t dwForceJump             = 0;
+    bool      valid                   = false;
 };
 
 class OffsetManager {
@@ -22,7 +24,8 @@ public:
     int SecondsSinceLastRefresh() const;
 
 private:
-    uintptr_t FindLocalPlayerPawn(HANDLE process, uintptr_t clientBase, DWORD clientSize);
+    uintptr_t FindLocalPlayerController(HANDLE process, uintptr_t clientBase, DWORD clientSize);
+    uintptr_t FindEntityList(HANDLE process, uintptr_t clientBase, DWORD clientSize);
     uintptr_t FindFlags(HANDLE process, DWORD pid, uintptr_t clientBase, DWORD clientSize);
     uintptr_t FindJump(HANDLE process, uintptr_t clientBase, DWORD clientSize);
 

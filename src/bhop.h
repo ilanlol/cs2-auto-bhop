@@ -19,6 +19,7 @@ public:
 
 private:
     void Run();
+    uintptr_t ResolvePawn(const struct GameOffsets& off);
 
     HANDLE           m_process    = nullptr;
     uintptr_t        m_clientBase = 0;

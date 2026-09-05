@@ -4,7 +4,7 @@
 #include "memory.h"
 #include <chrono>
 
-uintptr_t OffsetManager::FindLocalPlayerPawn(HANDLE process, uintptr_t clientBase, DWORD clientSize) {
+uintptr_t OffsetManager::FindLocalPlayerController(HANDLE process, uintptr_t clientBase, DWORD clientSize) {
     PatternScanner scanner(process, clientBase, clientSize);
 
     std::vector<PatternEntry> patterns = {
@@ -12,10 +12,29 @@ uintptr_t OffsetManager::FindLocalPlayerPawn(HANDLE process, uintptr_t clientBas
         { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 89 5C 24", 3, 7 },
         { "48 8D 05 ? ? ? ? 48 C1 E8 ? C3", 3, 7 },
         { "48 8D 05 ? ? ? ? 33 DB 48 85 C0", 3, 7 },
-        { "48 8B 0D ? ? ? ? 48 85 C9 74 ? E8 ? ? ? ? 48 8B 08", 3, 7 },
         { "48 8B 05 ? ? ? ? 48 85 C0 74 ? 8B 88", 3, 7 },
         { "48 8B 05 ? ? ? ? 48 85 C0 74 ? 48 8B 40", 3, 7 },
+        { "48 8B 0D ? ? ? ? 48 85 C9 74 ? E8 ? ? ? ? 48 8B 08", 3, 7 },
         { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 8D 0D", 3, 7 },
+    };
+
+    uintptr_t result = scanner.FindFirstRelative(patterns);
+    if (result && result > clientBase && result < clientBase + clientSize) {
+        uintptr_t rva = result - clientBase;
+        if (rva > 0x100000)
+            return rva;
+    }
+    return 0;
+}
+
+uintptr_t OffsetManager::FindEntityList(HANDLE process, uintptr_t clientBase, DWORD clientSize) {
+    PatternScanner scanner(process, clientBase, clientSize);
+
+    std::vector<PatternEntry> patterns = {
+        { "48 8B 0D ? ? ? ? 48 89 7C 24 ? 8B FA C1 EB", 3, 7 },
+        { "48 8B 0D ? ? ? ? E8 ? ? ? ? 48 8B D8 48 85 C0 74", 3, 7 },
+        { "48 8B 0D ? ? ? ? 48 89 7C 24 ? 8B FA 48", 3, 7 },
+        { "48 8B 0D ? ? ? ? 48 85 C9 74 ? 48 8B 41 ? 48 85 C0 74", 3, 7 },
     };
 
     uintptr_t result = scanner.FindFirstRelative(patterns);
@@ -95,6 +114,12 @@ uintptr_t OffsetManager::FindJump(HANDLE process, uintptr_t clientBase, DWORD cl
     if (!jumpStringAddr)
         return 0;
 
+    struct XrefResult {
+        size_t xrefPos;
+        uintptr_t buttonAddr;
+    };
+    std::vector<XrefResult> candidates;
+
     for (size_t i = 0; i + 7 < bytesRead; i++) {
         if (moduleData[i] != 0x48 && moduleData[i] != 0x4C)
             continue;
@@ -111,8 +136,16 @@ uintptr_t OffsetManager::FindJump(HANDLE process, uintptr_t clientBase, DWORD cl
         if (resolved != jumpStringAddr)
             continue;
 
+        bool hasCall = false;
+        for (size_t c = i; c < i + 30 && c + 5 < bytesRead; c++) {
+            if (moduleData[c] == 0xE8) {
+                hasCall = true;
+                break;
+            }
+        }
+
         size_t searchStart = (i > 32) ? i - 32 : 0;
-        uintptr_t bestBackward = 0;
+        uintptr_t bestAddr = 0;
         for (size_t j = searchStart; j < i; j++) {
             if (moduleData[j] != 0x48 && moduleData[j] != 0x4C)
                 continue;
@@ -129,32 +162,43 @@ uintptr_t OffsetManager::FindJump(HANDLE process, uintptr_t clientBase, DWORD cl
             if (buttonAddr > clientBase && buttonAddr < clientBase + clientSize && buttonAddr != jumpStringAddr) {
                 uintptr_t rva = buttonAddr - clientBase;
                 if (rva > 0x100000)
-                    bestBackward = rva;
+                    bestAddr = rva;
             }
         }
-        if (bestBackward)
-            return bestBackward;
 
-        for (size_t j = i + 7; j + 7 < bytesRead && j < i + 32; j++) {
-            if (moduleData[j] != 0x48 && moduleData[j] != 0x4C)
-                continue;
-            if (moduleData[j + 1] != 0x8D)
-                continue;
+        if (!bestAddr) {
+            for (size_t j = i + 7; j + 7 < bytesRead && j < i + 32; j++) {
+                if (moduleData[j] != 0x48 && moduleData[j] != 0x4C)
+                    continue;
+                if (moduleData[j + 1] != 0x8D)
+                    continue;
 
-            uint8_t modrm2 = moduleData[j + 2];
-            if ((modrm2 & 0xC7) != 0x05)
-                continue;
+                uint8_t modrm2 = moduleData[j + 2];
+                if ((modrm2 & 0xC7) != 0x05)
+                    continue;
 
-            int32_t rel2 = *reinterpret_cast<int32_t*>(moduleData.data() + j + 3);
-            uintptr_t buttonAddr = (clientBase + j + 7) + rel2;
+                int32_t rel2 = *reinterpret_cast<int32_t*>(moduleData.data() + j + 3);
+                uintptr_t buttonAddr = (clientBase + j + 7) + rel2;
 
-            if (buttonAddr > clientBase && buttonAddr < clientBase + clientSize && buttonAddr != jumpStringAddr) {
-                uintptr_t rva = buttonAddr - clientBase;
-                if (rva > 0x100000)
-                    return rva;
+                if (buttonAddr > clientBase && buttonAddr < clientBase + clientSize && buttonAddr != jumpStringAddr) {
+                    uintptr_t rva = buttonAddr - clientBase;
+                    if (rva > 0x100000) {
+                        bestAddr = rva;
+                        break;
+                    }
+                }
             }
+        }
+
+        if (bestAddr) {
+            candidates.push_back({ i, bestAddr });
+            if (hasCall)
+                return bestAddr;
         }
     }
+
+    if (!candidates.empty())
+        return candidates.back().buttonAddr;
 
     return 0;
 }
@@ -162,11 +206,20 @@ uintptr_t OffsetManager::FindJump(HANDLE process, uintptr_t clientBase, DWORD cl
 bool OffsetManager::ResolveAll(HANDLE process, DWORD pid, uintptr_t clientBase, DWORD clientSize) {
     GameOffsets newOffsets;
 
-    newOffsets.dwLocalPlayerPawn = FindLocalPlayerPawn(process, clientBase, clientSize);
+    newOffsets.dwLocalPlayerController = FindLocalPlayerController(process, clientBase, clientSize);
+    newOffsets.dwEntityList = FindEntityList(process, clientBase, clientSize);
     newOffsets.m_fFlags = FindFlags(process, pid, clientBase, clientSize);
     newOffsets.dwForceJump = FindJump(process, clientBase, clientSize);
 
-    newOffsets.valid = (newOffsets.dwLocalPlayerPawn != 0 &&
+    int32_t pawnOff = schema::FindFieldOffset(process, pid, "client.dll", "CCSPlayerController", "m_hPlayerPawn");
+    if (pawnOff <= 0)
+        pawnOff = schema::FindFieldOffset(process, pid, "client.dll", "CCSPlayerController", "m_hPawn");
+    if (pawnOff > 0 && pawnOff < 0x2000)
+        newOffsets.m_hPlayerPawn = static_cast<uintptr_t>(pawnOff);
+
+    newOffsets.valid = (newOffsets.dwLocalPlayerController != 0 &&
+                       newOffsets.dwEntityList != 0 &&
+                       newOffsets.m_hPlayerPawn != 0 &&
                        newOffsets.m_fFlags != 0 &&
                        newOffsets.dwForceJump != 0);
 

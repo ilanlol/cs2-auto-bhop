@@ -95,7 +95,7 @@ inline void drawHeader() {
     std::cout << "\n";
 }
 
-constexpr int HUD_ROW = 19;
+constexpr int HUD_ROW = 21;
 
 inline void drawHUD(bool spaceHeld, bool onGround, uint64_t jumpCount) {
     std::cout << ansi::moveTo(HUD_ROW, 1) << ansi::clearLine();

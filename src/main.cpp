@@ -75,41 +75,25 @@ int main() {
     bool resolved = offsetMgr.ResolveAll(process, pid, clientBase, clientSize);
     GameOffsets off = offsetMgr.Get();
 
-    if (resolved) {
-        snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.dwLocalPlayerPawn);
-        ui::drawStatusLine("\xFE", "dwLocalPlayerPawn", hexBuf, pal::good(), pal::white());
+    auto drawOffset = [&](const char* name, uintptr_t val) {
+        if (val) {
+            snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)val);
+            ui::drawStatusLine("\xFE", name, hexBuf, pal::good(), pal::white());
+        } else {
+            ui::drawStatusLine("X", name, "FAILED", pal::bad(), pal::bad());
+        }
+    };
 
-        snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.m_fFlags);
-        ui::drawStatusLine("\xFE", "m_fFlags", hexBuf, pal::good(), pal::white());
+    drawOffset("controller", off.dwLocalPlayerController);
+    drawOffset("entityList", off.dwEntityList);
+    drawOffset("m_hPlayerPawn", off.m_hPlayerPawn);
+    drawOffset("m_fFlags", off.m_fFlags);
+    drawOffset("jump", off.dwForceJump);
 
-        snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.dwForceJump);
-        ui::drawStatusLine("\xFE", "jump", hexBuf, pal::good(), pal::white());
-
+    if (resolved)
         ui::drawStatusLine("\xFE", "Addresses", "resolved", pal::good(), pal::muted());
-    } else {
-        if (off.dwLocalPlayerPawn == 0)
-            ui::drawStatusLine("X", "dwLocalPlayerPawn", "FAILED", pal::bad(), pal::bad());
-        else {
-            snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.dwLocalPlayerPawn);
-            ui::drawStatusLine("\xFE", "dwLocalPlayerPawn", hexBuf, pal::good(), pal::white());
-        }
-
-        if (off.m_fFlags == 0)
-            ui::drawStatusLine("X", "m_fFlags", "FAILED", pal::bad(), pal::bad());
-        else {
-            snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.m_fFlags);
-            ui::drawStatusLine("\xFE", "m_fFlags", hexBuf, pal::good(), pal::white());
-        }
-
-        if (off.dwForceJump == 0)
-            ui::drawStatusLine("X", "jump", "FAILED", pal::bad(), pal::bad());
-        else {
-            snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.dwForceJump);
-            ui::drawStatusLine("\xFE", "jump", hexBuf, pal::good(), pal::white());
-        }
-
+    else
         ui::drawStatusLine("X", "Addresses", "partial - bhop may not work", pal::bad(), pal::warn());
-    }
 
     offsetMgr.StartAutoRefresh(process, pid, clientBase, clientSize, 60000);
 

@@ -211,20 +211,18 @@ void Overlay::RenderUI() {
 
     char hexBuf[32];
 
-    ImGui::Text("dwLocalPlayerPawn");
-    ImGui::SameLine(200);
-    snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.dwLocalPlayerPawn);
-    ImGui::TextColored(off.dwLocalPlayerPawn ? ImVec4(1,1,1,1) : ImVec4(1,0.3f,0.3f,1), "%s", hexBuf);
+    auto drawOffsetRow = [&](const char* label, uintptr_t val) {
+        ImGui::Text("%s", label);
+        ImGui::SameLine(200);
+        snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)val);
+        ImGui::TextColored(val ? ImVec4(1,1,1,1) : ImVec4(1,0.3f,0.3f,1), "%s", hexBuf);
+    };
 
-    ImGui::Text("m_fFlags");
-    ImGui::SameLine(200);
-    snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.m_fFlags);
-    ImGui::TextColored(off.m_fFlags ? ImVec4(1,1,1,1) : ImVec4(1,0.3f,0.3f,1), "%s", hexBuf);
-
-    ImGui::Text("jump");
-    ImGui::SameLine(200);
-    snprintf(hexBuf, sizeof(hexBuf), "0x%llX", (unsigned long long)off.dwForceJump);
-    ImGui::TextColored(off.dwForceJump ? ImVec4(1,1,1,1) : ImVec4(1,0.3f,0.3f,1), "%s", hexBuf);
+    drawOffsetRow("controller", off.dwLocalPlayerController);
+    drawOffsetRow("entityList", off.dwEntityList);
+    drawOffsetRow("m_hPlayerPawn", off.m_hPlayerPawn);
+    drawOffsetRow("m_fFlags", off.m_fFlags);
+    drawOffsetRow("jump", off.dwForceJump);
 
     ImGui::Text("Last refresh");
     ImGui::SameLine(200);
