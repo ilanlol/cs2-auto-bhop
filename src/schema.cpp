@@ -5,7 +5,60 @@
 
 namespace schema {
 
+static uintptr_t FindSchemaSystemViaInterface(HANDLE process, DWORD pid) {
+    auto modInfo = mem::GetModuleInfo(pid, L"schemasystem.dll");
+    if (!modInfo.base || !modInfo.size) return 0;
+
+    std::vector<uint8_t> moduleData(modInfo.size);
+    SIZE_T bytesRead = 0;
+    if (!ReadProcessMemory(process, reinterpret_cast<LPCVOID>(modInfo.base),
+                           moduleData.data(), modInfo.size, &bytesRead) || bytesRead == 0)
+        return 0;
+
+    const char* target = "SchemaSystem_001";
+    size_t targetLen = 16;
+    uintptr_t stringAddr = 0;
+
+    for (size_t i = 0; i + targetLen < bytesRead; i++) {
+        if (memcmp(moduleData.data() + i, target, targetLen) == 0 && moduleData[i + targetLen] == '\0') {
+            stringAddr = modInfo.base + i;
+            break;
+        }
+    }
+    if (!stringAddr) return 0;
+
+    for (size_t i = 0; i + 24 <= bytesRead; i += 8) {
+        uintptr_t namePtr = *reinterpret_cast<uintptr_t*>(moduleData.data() + i + 8);
+        if (namePtr == stringAddr) {
+            uintptr_t createFn = *reinterpret_cast<uintptr_t*>(moduleData.data() + i);
+            if (createFn >= modInfo.base && createFn < modInfo.base + modInfo.size) {
+                size_t fnOffset = createFn - modInfo.base;
+                if (fnOffset + 10 < bytesRead) {
+                    uint8_t* fn = moduleData.data() + fnOffset;
+                    if (fn[0] == 0x48 && (fn[1] == 0x8D || fn[1] == 0x8B) && fn[2] == 0x05) {
+                        int32_t rel = *reinterpret_cast<int32_t*>(fn + 3);
+                        return createFn + 7 + rel;
+                    }
+                    for (size_t k = 0; k + 7 < 32 && fnOffset + k + 7 < bytesRead; k++) {
+                        if (fn[k] == 0x48 && (fn[k+1] == 0x8D || fn[k+1] == 0x8B) && fn[k+2] == 0x05) {
+                            int32_t rel = *reinterpret_cast<int32_t*>(fn + k + 3);
+                            uintptr_t resolved = (createFn + k + 7) + rel;
+                            if (resolved > modInfo.base && resolved < modInfo.base + modInfo.size)
+                                return resolved;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+    }
+    return 0;
+}
+
 static uintptr_t FindSchemaSystemSingleton(HANDLE process, DWORD pid) {
+    uintptr_t result = FindSchemaSystemViaInterface(process, pid);
+    if (result) return result;
+
     auto modInfo = mem::GetModuleInfo(pid, L"schemasystem.dll");
     if (!modInfo.base) return 0;
 
@@ -42,7 +95,7 @@ static uintptr_t FindTypeScopeWithOffset(HANDLE process, uintptr_t schemaSystem,
 }
 
 static uintptr_t FindTypeScope(HANDLE process, uintptr_t schemaSystem, const std::string& scopeName) {
-    static const uintptr_t scopeOffsets[] = { 0x190, 0x188, 0x198 };
+    static const uintptr_t scopeOffsets[] = { 0x190, 0x188, 0x198, 0x1A0 };
     for (auto off : scopeOffsets) {
         uintptr_t scope = FindTypeScopeWithOffset(process, schemaSystem, off, scopeName);
         if (scope) return scope;
@@ -88,7 +141,7 @@ static uintptr_t FindClassBindingWithOffset(HANDLE process, uintptr_t typeScope,
 }
 
 static uintptr_t FindClassBinding(HANDLE process, uintptr_t typeScope, const std::string& className) {
-    static const uintptr_t hashOffsets[] = { 0x558, 0x550, 0x5B8, 0x590 };
+    static const uintptr_t hashOffsets[] = { 0x558, 0x550, 0x5B8, 0x590, 0x548 };
     for (auto off : hashOffsets) {
         uintptr_t binding = FindClassBindingWithOffset(process, typeScope, off, className);
         if (binding) return binding;

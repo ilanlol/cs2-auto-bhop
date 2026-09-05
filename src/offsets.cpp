@@ -10,6 +10,9 @@ uintptr_t OffsetManager::FindLocalPlayerPawn(HANDLE process, uintptr_t clientBas
     std::vector<PatternEntry> patterns = {
         { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 83 EC 28 E8", 3, 7 },
         { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 89 5C 24", 3, 7 },
+        { "48 8D 05 ? ? ? ? 48 C1 E8 ? C3", 3, 7 },
+        { "48 8D 05 ? ? ? ? 33 DB 48 85 C0", 3, 7 },
+        { "48 8B 0D ? ? ? ? 48 85 C9 74 ? E8 ? ? ? ? 48 8B 08", 3, 7 },
         { "48 8B 05 ? ? ? ? 48 85 C0 74 ? 8B 88", 3, 7 },
         { "48 8B 05 ? ? ? ? 48 85 C0 74 ? 48 8B 40", 3, 7 },
         { "48 8D 05 ? ? ? ? C3 CC CC CC CC CC CC CC CC 48 8D 0D", 3, 7 },
@@ -108,7 +111,8 @@ uintptr_t OffsetManager::FindJump(HANDLE process, uintptr_t clientBase, DWORD cl
         if (resolved != jumpStringAddr)
             continue;
 
-        size_t searchStart = (i > 64) ? i - 64 : 0;
+        size_t searchStart = (i > 32) ? i - 32 : 0;
+        uintptr_t bestBackward = 0;
         for (size_t j = searchStart; j < i; j++) {
             if (moduleData[j] != 0x48 && moduleData[j] != 0x4C)
                 continue;
@@ -125,12 +129,13 @@ uintptr_t OffsetManager::FindJump(HANDLE process, uintptr_t clientBase, DWORD cl
             if (buttonAddr > clientBase && buttonAddr < clientBase + clientSize && buttonAddr != jumpStringAddr) {
                 uintptr_t rva = buttonAddr - clientBase;
                 if (rva > 0x100000)
-                    return rva;
+                    bestBackward = rva;
             }
         }
+        if (bestBackward)
+            return bestBackward;
 
-        size_t searchEnd = (i + 64 + 7 < bytesRead) ? i + 64 : bytesRead - 7;
-        for (size_t j = i + 7; j < searchEnd; j++) {
+        for (size_t j = i + 7; j + 7 < bytesRead && j < i + 32; j++) {
             if (moduleData[j] != 0x48 && moduleData[j] != 0x4C)
                 continue;
             if (moduleData[j + 1] != 0x8D)
